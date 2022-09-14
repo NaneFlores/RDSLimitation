@@ -1,0 +1,181 @@
+--CREATE DATABASE Traces
+--GO
+
+USE TRACES;
+CREATE TABLE [dbo].[JobStep](
+	[Job_id] [uniqueidentifier] NULL,
+	[step_count] [int] NULL,
+	[step_id] [int] NULL,
+	[step_name] [sysname] NULL,
+	[subsystem] [nvarchar](40) NULL,
+	[command] [nvarchar](max) NULL,
+	[flags] [int] NULL,
+	[cmdexec_success_code] [int] NULL,
+	[on_success_action] [tinyint] NULL,
+	[on_success_step_id] [int] NULL,
+	[on_fail_action] [tinyint] NULL,
+	[on_fail_step_id] [int] NULL,
+	[server] [sysname] NULL,
+	[database_name] [sysname] NULL,
+	[database_user_name] [sysname] NULL,
+	[retry_attempts] [int] NULL,
+	[retry_interval] [int] NULL,
+	[os_run_priority] [int] NULL,
+	[output_file_name] [nvarchar](200) NULL,
+	[last_run_outcome] [int] NULL,
+	[last_run_duration] [int] NULL,
+	[last_run_retries] [int] NULL,
+	[last_run_date] [int] NULL,
+	[last_run_time] [int] NULL,
+	[proxy_id] [int] NULL
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+
+USE TRACES
+GO
+
+
+CREATE PROCEDURE stpPowerMonitor_Load_StepRDS
+AS
+BEGIN
+
+	TRUNCATE TABLE Traces.dbo.JobStep
+
+	CREATE TABLE #JobStep (
+		step_id int NULL,  
+		step_name sysname NULL,
+		subsystem nvarchar(40) NULL,
+		command nvarchar(max) NULL,
+		flags int NULL,
+		cmdexec_success_code int NULL,
+		on_success_action tinyint NULL,
+		on_success_step_id int NULL,
+		on_fail_action tinyint NULL,
+		on_fail_step_id int NULL, 
+		server sysname NULL,
+		database_name sysname NULL,
+		database_user_name sysname NULL,
+		retry_attempts int NULL,
+		retry_interval int NULL,
+		os_run_priority int NULL,
+		output_file_name nvarchar(200) NULL,
+		last_run_outcome int NULL ,  
+		last_run_duration int NULL, 
+		last_run_retries int NULL,
+		last_run_date int NULL,
+		last_run_time int NULL,
+		proxy_id int NULL
+	)
+	
+	INSERT INTO Traces.dbo.JobStep (job_id,step_count)
+	SELECT job_id, '1'
+	FROM msdb.dbo.sysjobs
+	WHERE name NOT IN ('syspolicy_purge_history')
+	
+	SELECT job_id
+	INTO #JOBS
+	FROM msdb.dbo.sysjobs
+	WHERE name NOT IN ('syspolicy_purge_history')
+	
+	DECLARE @Job_id uniqueidentifier
+	DECLARE @CommandExec VARCHAR(MAX)
+		
+	WHILE EXISTS (SELECT TOP 1 1 FROM #JOBS)
+	BEGIN 
+
+	TRUNCATE TABLE #JobStep
+
+	SELECT TOP 1 @Job_id = job_id
+	FROM #JOBS
+	
+	SET @CommandExec = 'INSERT INTO #JobStep exec msdb.dbo.sp_agent_get_jobstep @Job_id = ''' + CAST (@Job_id AS VARCHAR(MAX)) + ''''
+	
+	--PRINT @CommandExec
+	BEGIN TRY
+		EXECUTE (@CommandExec)
+	END TRY
+	BEGIN CATCH
+		SELECT ERROR_MESSAGE() AS ErrorMessage
+	END CATCH
+
+	DECLARE @i INT = 2
+	DECLARE @counstep INT = (SELECT COUNT(*) FROM #JobStep)
+
+	IF (@counstep > 1)
+	BEGIN
+		PRINT 'mais de 1 step'
+
+		WHILE (@i <= @counstep)
+		BEGIN
+			INSERT INTO Traces.dbo.JobStep (JOB_ID,step_count)
+			VALUES (@job_id,@i)
+		SET @i = @i + 1
+		END
+
+			UPDATE JS
+			SET step_id = js2.step_id,  
+				step_name = js2.step_name,
+				subsystem = js2.subsystem,
+				command = js2.command,
+				flags = js2.flags,
+				cmdexec_success_code = js2.cmdexec_success_code,
+				on_success_action = js2.on_success_action,
+				on_success_step_id = js2.on_success_step_id,
+				on_fail_action = js2.on_fail_action,
+				on_fail_step_id = js2.on_fail_step_id, 
+				server = js2.server,
+				database_name = js2.database_name,
+				database_user_name = js2.database_user_name,
+				retry_attempts = js2.retry_attempts,
+				retry_interval = js2.retry_interval,
+				os_run_priority = js2.os_run_priority,
+				output_file_name = js2.output_file_name,
+				last_run_outcome = js2.last_run_outcome,  
+				last_run_duration = js2.last_run_duration, 
+				last_run_retries = js2.last_run_retries,
+				last_run_date = js2.last_run_date,
+				last_run_time = js2.last_run_time,
+				proxy_id = js2.proxy_id
+			FROM Traces.dbo.JobStep js
+			INNER JOIN  #JobStep js2 ON js.step_count = js2.step_id					
+			WHERE job_id = @job_id
+	
+	END
+	ELSE
+	BEGIN	
+			UPDATE JS
+			SET step_id = js2.step_id,  
+				step_name = js2.step_name,
+				subsystem = js2.subsystem,
+				command = js2.command,
+				flags = js2.flags,
+				cmdexec_success_code = js2.cmdexec_success_code,
+				on_success_action = js2.on_success_action,
+				on_success_step_id = js2.on_success_step_id,
+				on_fail_action = js2.on_fail_action,
+				on_fail_step_id = js2.on_fail_step_id, 
+				server = js2.server,
+				database_name = js2.database_name,
+				database_user_name = js2.database_user_name,
+				retry_attempts = js2.retry_attempts,
+				retry_interval = js2.retry_interval,
+				os_run_priority = js2.os_run_priority,
+				output_file_name = js2.output_file_name,
+				last_run_outcome = js2.last_run_outcome,  
+				last_run_duration = js2.last_run_duration, 
+				last_run_retries = js2.last_run_retries,
+				last_run_date = js2.last_run_date,
+				last_run_time = js2.last_run_time,
+				proxy_id = js2.proxy_id
+			FROM Traces.dbo.JobStep js
+			INNER JOIN  #JobStep js2 ON js.step_count = js2.step_id					
+			WHERE job_id = @job_id
+	END
+	
+	DELETE FROM #JOBS WHERE job_id = @Job_id
+	
+	END
+END
+
+
